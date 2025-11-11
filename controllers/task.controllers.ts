@@ -4,7 +4,8 @@ import jwt from "jsonwebtoken";
 import type{JwtPayload} from 'jsonwebtoken'
 
 const extractUserIdFromCookie = (req: Request): string | null => {
-  const token = req.cookies?.token;
+  const token =
+    req.cookies?.token || req.headers.authorization?.split(" ")[1];
   if (!token) return null;
 
   const jwtSecret = process.env.JWT_SECRET;
@@ -13,10 +14,12 @@ const extractUserIdFromCookie = (req: Request): string | null => {
   try {
     const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
     return decoded.id as string;
-  } catch {
+  } catch (error) {
+    console.error("JWT verification failed:", error);
     return null;
   }
 };
+
 
 export const addTask = async (req: Request, res: Response) => {
   try {
