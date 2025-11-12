@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import bcrypt from 'bcrypt';
 import cloudinary from "../configs/upload";
 import streamifier from 'streamifier';
-import jwt, { type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
+import jwt, { type Jwt, type JwtPayload, type Secret, type SignOptions } from 'jsonwebtoken';
 import UserModel from "../models/user.model";
 
 export const addUser = async (req: Request, res: Response) => {
@@ -88,11 +88,11 @@ export const loginUser = async (req: Request, res: Response) => {
             { expiresIn: "1d" }
         );
 
-        res.cookie("token",token,{
-            httpOnly:true,
-            secure:false,
-            sameSite:"lax",
-            maxAge:1000 * 60 * 60 * 24
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: false,
+            sameSite: "lax",
+            maxAge: 1000 * 60 * 60 * 24
         })
         return res.status(200).json({
             message: "Login successful!",
@@ -114,27 +114,39 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 };
 
-export const verifyUser = async (req: Request, res: Response) => {
+
+
+export const viewProfile = async (req: Request, res: Response) => {
     try {
-        const token = req.headers.authorization?.split(" ")[1];
-        if (!token) return res.status(401).json({ message: "token doesn't provided" });
-
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload & { id: string };
-        const user = await UserModel.findById(decoded.id).select("-password");
-        if (!user) return res.status(404).json({ message: "User not found" });
-
-        res.json({ valid: true, user:{
-            id: user._id,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        age: user.age,
-        address: user.address,
-        profile: user.profileImage,
-        lastLogin: user.lastLogin,
-        } });
-    } catch (err) {
-        console.error(err);
-        res.status(401).json({ valid: false, message: "Invalid or expired token" });
+        const token = req.cookies?.token || req.headers.authorization?.split("")[1];
+        if (!token) {
+            return res.status(401).json({ message: "No token provided!" });
+        }
+        console.log(token);
+        
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string }
+        const findLoggedUser = await UserModel.findById(decodedToken.id).select("-password")
+        if (!findLoggedUser) {
+            return res.status(404).json({ message: "User did't completed authentication!" })
+        }
+        return res.status(200).json({
+            message: "User profile fetched successfully!", user: {
+                id: findLoggedUser._id,
+                username: findLoggedUser.username,
+                email: findLoggedUser.email,
+                phone: findLoggedUser.phone,
+                age: findLoggedUser.age,
+                address: findLoggedUser.address,
+                profileImage: findLoggedUser.profileImage,
+                lastLogin: findLoggedUser.lastLogin,
+            },
+        });
+        
+    } catch (error) {
+        console.error("Error fetching profile:", error);
+        return res.status(500).json({
+            message: "Failed to fetch user profile!",
+            error,
+        });
     }
 }

@@ -1,6 +1,6 @@
 import exrpess from 'express'
-import multer from 'multer'
-import { addUser, loginUser, verifyUser } from '../controllers/user.controller'
+import multer from 'multer';
+import { addUser, loginUser, viewProfile } from '../controllers/user.controller'
 import { verifyToken } from '../middleware/auth.middleware'
 
 const router = exrpess.Router()
@@ -9,5 +9,7 @@ const upload = multer({storage})
 
 router.post('/addUser',upload.single('profile'),addUser)
 router.post('/loginUser',loginUser)
-router.get('/verifyUser',verifyToken,verifyUser)
+// router.get('/verifyUser',verifyToken,verifyUser)
+router.get("/viewProfile",verifyToken,viewProfile)
+
 export default router;
