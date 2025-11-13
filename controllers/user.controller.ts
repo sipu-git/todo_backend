@@ -114,39 +114,112 @@ export const loginUser = async (req: Request, res: Response) => {
     }
 };
 
-
-
 export const viewProfile = async (req: Request, res: Response) => {
     try {
-        const token = req.cookies?.token || req.headers.authorization?.split("")[1];
+        const authHeader = req.headers.authorization;
+        const token =
+            req.cookies?.token ||
+            (authHeader && authHeader.startsWith("Bearer ")
+                ? authHeader.split(" ")[1]
+                : null); if (!token) {
+                    return res.status(401).json({ message: "No token found!" })
+                }
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string };
+        const fetchUser = await UserModel.findById(decodedToken.id)
+        if (!fetchUser) {
+            return res.status(404).json({ message: "User doesn't exist!" })
+        }
+        return res.status(200).json({
+            message: "User profile fetched successfully!",
+            user: {
+                id: fetchUser._id,
+                username: fetchUser.username,
+                email: fetchUser.email,
+                phone: fetchUser.phone,
+                age: fetchUser.age,
+                address: fetchUser.address,
+                profileImage: fetchUser.profileImage,
+            },
+        });
+    } catch (error) {
+        console.error("Login failed:", error);
+        return res.status(500).json({ message: "Internal server error", error });
+
+    }
+}
+export const viewProfileAndUpdate = async (req: Request, res: Response) => {
+    try {
+        const token =
+            req.cookies?.token || req.headers.authorization?.split(" ")[1];
         if (!token) {
             return res.status(401).json({ message: "No token provided!" });
         }
-        console.log(token);
-        
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string }
-        const findLoggedUser = await UserModel.findById(decodedToken.id).select("-password")
+
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string };
+
+        const findLoggedUser = await UserModel.findById(decodedToken.id).select("-password");
         if (!findLoggedUser) {
-            return res.status(404).json({ message: "User did't completed authentication!" })
+            return res
+                .status(404)
+                .json({ message: "User didn't complete authentication!" });
         }
-        return res.status(200).json({
-            message: "User profile fetched successfully!", user: {
-                id: findLoggedUser._id,
-                username: findLoggedUser.username,
-                email: findLoggedUser.email,
-                phone: findLoggedUser.phone,
-                age: findLoggedUser.age,
-                address: findLoggedUser.address,
-                profileImage: findLoggedUser.profileImage,
-                lastLogin: findLoggedUser.lastLogin,
+
+        let profileImageUrl = findLoggedUser.profileImage;
+
+        if (req.file) {
+            if (findLoggedUser.profileImage) {
+                try {
+                    const imageUrl = findLoggedUser.profileImage;
+                    const publicId =
+                        imageUrl?.split("/")?.pop()?.split(".")?.[0] || "";
+
+                    if (publicId) {
+                        await cloudinary.uploader.destroy(
+                            `${process.env.CLOUDINARY_FOLDER || "profile"}/${publicId}`
+                        );
+                        console.log("Old image deleted successfully.");
+                    }
+                } catch (err) {
+                    console.warn("Failed to delete old image:", err);
+                }
+            }
+
+            const uploadResult: any = await new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    { folder: process.env.CLOUDINARY_FOLDER || "profile" },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                );
+                streamifier.createReadStream(req.file!.buffer).pipe(uploadStream);
+            });
+
+            profileImageUrl = uploadResult.secure_url;
+        }
+
+        const updatedUser = await UserModel.findByIdAndUpdate(
+            decodedToken.id,
+            {
+                username: req.body.username || findLoggedUser.username,
+                email: req.body.email || findLoggedUser.email,
+                phone: req.body.phone || findLoggedUser.phone,
+                age: req.body.age || findLoggedUser.age,
+                address: req.body.address || findLoggedUser.address,
+                profileImage: profileImageUrl,
             },
+            { new: true, runValidators: true, select: "-password" }
+        );
+
+        return res.status(200).json({
+            message: "User profile fetched and updated successfully!",
+            user: updatedUser,
         });
-        
     } catch (error) {
-        console.error("Error fetching profile:", error);
+        console.error("Error fetching/updating profile:", error);
         return res.status(500).json({
-            message: "Failed to fetch user profile!",
+            message: "Failed to fetch/update user profile!",
             error,
         });
     }
-}
+};
