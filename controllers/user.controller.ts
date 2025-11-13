@@ -117,14 +117,8 @@ export const loginUser = async (req: Request, res: Response) => {
 export const viewProfile = async (req: Request, res: Response) => {
     try {
         const authHeader = req.headers.authorization;
-        const token =
-            req.cookies?.token ||
-            (authHeader && authHeader.startsWith("Bearer ")
-                ? authHeader.split(" ")[1]
-                : null); if (!token) {
-                    return res.status(401).json({ message: "No token found!" })
-                }
-        const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string };
+        const token = req.cookies?.token || (authHeader && authHeader.split(" ")[1]);
+         const decodedToken = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload & { id: string };
         const fetchUser = await UserModel.findById(decodedToken.id)
         if (!fetchUser) {
             return res.status(404).json({ message: "User doesn't exist!" })
@@ -144,13 +138,12 @@ export const viewProfile = async (req: Request, res: Response) => {
     } catch (error) {
         console.error("Login failed:", error);
         return res.status(500).json({ message: "Internal server error", error });
-
     }
 }
+
 export const viewProfileAndUpdate = async (req: Request, res: Response) => {
     try {
-        const token =
-            req.cookies?.token || req.headers.authorization?.split(" ")[1];
+        const token =req.cookies?.token || req.headers.authorization?.split(" ")[1];
         if (!token) {
             return res.status(401).json({ message: "No token provided!" });
         }
